@@ -3,15 +3,13 @@
         this.type = "folder"
         this.path = path;
         this.children = [];
-        this.id = "file_list_container";
         var lastSlashIndex = path.split('/').length;
         this.name = path.split('/')[lastSlashIndex - 1];
     };
 
-    var FileObject = function(path, id) {
+    var FileObject = function(path){
         this.type = "file"
         this.path = path || "root";
-        this.parentid = id || "local_root";
         var lastDotIndex = path.split('.').length;
         var lastSlashIndex = path.split('/').length;
         this.extension = path.split('.')[lastDotIndex - 1];
@@ -21,24 +19,29 @@
     //directories of image files
     var imgList = {
         folder : {
-            empty : "./PNG/folder.png",
-            plus : "./PNG/folder-plus.png",
-            minus: "./PNG/folder-minus.png"
+            empty : "./images/folder.png",
+            plus : "./images/folder-plus.png",
+            minus: "./images/folder-minus.png"
         },
         file :{
-            text : "./PNG/file-text2.png"
+            text : "./images/file-text2.png"
         } 
     };
 
     var fileList = {
+        entry: {},
         dirCounter: 0,
         readDirCounter: 0,
+        structureData: {},
         mainDirObj: {},
         dropZone: {},
+        filter:{},
+        filterData: [],
         dataDrop: function(event) {
             //Event 
             event.stopPropagation();
             event.preventDefault();
+            
             fileList.dropZone.style.backgroundColor = "#eae9e9";
             //Loading Data 
             var dataTransfer = event.dataTransfer;
@@ -47,25 +50,22 @@
                 //Single File or Folder
                 if (items.length == 1) {
                     var item = items[0];
-                    var entry;
                     if (item.getAsEntry) {
-                        entry = item.getAsEntry();
+                        fileList.entry = item.getAsEntry();
                         //Supported only Chrome?
                     } else if (item.webkitGetAsEntry) {
-                        entry = item.webkitGetAsEntry();
+                        fileList.entry = item.webkitGetAsEntry();
                     }
-                    if (entry.isDirectory) {
+                    if (fileList.entry.isDirectory) {
                         //get the first folder data
-                        fileList.mainDirObj = new DirObject(entry.fullPath);
-                        fileList.mainDirObj.id = fileList.mainDirObj.id + "_root";
-                        fileList.readAllEntry(entry, fileList.mainDirObj);
+                        fileList.mainDirObj = new DirObject(fileList.entry.fullPath);
+                        fileList.filterData = fileList.filter.value.replace(/\s+/g, "").toLowerCase().split(",");
+                        fileList.readAllEntry(fileList.entry, fileList.mainDirObj);
                     } else {
-                        var text = document.getElementByid("text");
-                        text.innerHTML = "Please drop a folder";
+                        alert("Please drop a folder!");
                     }
                 } else {
-                    var text = document.getElementByid("text");
-                    text.innerHTML = "Please drop a folder";
+                    alert("Please drop a folder!");
                 }
             }
         },
@@ -79,41 +79,82 @@
             event.preventDefault();
             fileList.dropZone.style.backgroundColor = "#eae9e9";
         },
+        onEnterKey: function(event){
+            event.stopPropagation();
+            //Enter key pressed
+            if(event.keyCode == 13 ){
+                event.preventDefault();
+                fileList.filterData = fileList.filter.value.replace(/\s+/g, "").toLowerCase().split(",");
+                //Check the root object
+                if(Object.keys(fileList.mainDirObj).length != 0){
+                    fileList.readAllEntry(fileList.entry, fileList.mainDirObj);
+                }
+            }
+        },
+        isInclude: function(fileObject){
+            var result = true;
+            var index = -1;
+            var lowerName = fileObject.name.toLowerCase();
+            for( var i = 0; i < fileList.filterData.length; i++ ){
+                var filter = fileList.filterData[i];
+                if( filter != ""){
+                    index = lowerName.search(filter);
+                    if( index >= 0){
+                        result = true;
+                        return result; 
+                    }else{
+                        result = false;
+                    }
+                }            
+            }
+            return result;
+        },
         readAllEntry: function(entry, dirObject) {
             fileList.dirCounter++;
             var reader = entry.createReader();
             reader.readEntries(
                     // callback
                 function(results) {
+                    console.log(results);
+                    var pushCounter = 0;
                     for (var id = 0; id < results.length; id++) {
                         if (results[id].isDirectory) {
                             var subDirObject = new DirObject(results[id].fullPath);
-                            subDirObject.id = dirObject.id + "_" + id;
                             dirObject.children.push(subDirObject);
-                            fileList.readAllEntry(results[id], dirObject.children[id]);
+                            fileList.readAllEntry(results[id], dirObject.children[pushCounter]);
+                            pushCounter++;
                         } else if (results[id].isFile) {
-                            var fileObject = new FileObject(results[id].fullPath, dirObject.id);
-                            dirObject.children.push(fileObject);
+                            var fileObject = new FileObject(results[id].fullPath);
+                            if(fileList.isInclude(fileObject) === true){
+                                dirObject.children.push(fileObject);
+                                pushCounter++;
+                            }
                         }
                     }
                     fileList.readDirCounter++;
+                    // All entries loaded
                     if (fileList.dirCounter == fileList.readDirCounter) {
-                        //alert("ALL ENTRIES LOADED");
-                        fileList.generateStructure(fileList.mainDirObj);
+                        fileList.dirCounter = 0;
+                        fileList.readDirCounter = 0;
+                        var tmpDirObj = fileList.mainDirObj;
+                        fileList.mainDirObj = new DirObject(fileList.entry.fullPath);
+                        fileList.generateStructure(tmpDirObj);
                     }
                 },
                 // loading error
-                        function(error) {
-                            alert("File Loading Error!");
-                        }
-                );
-            },
+                function(error) {
+                    alert("File Loading Error!");
+                }
+            );
+        },
         init: function() {
             //Events
-            fileList.dropZone = document.getElementById("dropZone");
+            fileList.dropZone = document.getElementById("drop-zone");
             fileList.dropZone.addEventListener("drop", fileList.dataDrop, false);
             fileList.dropZone.addEventListener("dragover", fileList.dataDragover, false);
             fileList.dropZone.addEventListener("dragleave", fileList.dataDragleave, false);
+            fileList.filter = document.getElementById("filter-data");
+            fileList.filter.addEventListener("keypress", fileList.onEnterKey, false);
         },
         generateStructure: function (structureData) {
             //svg size  
@@ -129,6 +170,7 @@
             var diagonal = d3.svg.diagonal().projection(function(data) {
                 return [data.y, data.x];
             });
+            d3.select("svg").remove();
 
             var svg = d3.select("body").append("svg")
                     .attr("width", width + margin.right + margin.left)
@@ -142,7 +184,7 @@
 
             update(root);
 
-            d3.select(self.frameElement).style("height", "600px");
+            d3.select(self.frameElement).style("height", "800px");
 
             //determine the data type
             function checkDir(data){
@@ -162,7 +204,6 @@
                 var nodes = tree.nodes(root).reverse();
                 var links = tree.links(nodes);
 
-                // Normalize for fixed-depth.
                 nodes.forEach(function(data) {
                     data.y = data.depth * 160;
                 });
@@ -173,7 +214,7 @@
                             return data.id || (data.id = ++nodeCounter);
                         });
 
-                // Enter any new nodes at the parent's previous position.
+                // Enter new nodes at the parent's previous position.
                 var nodeEnter = node.enter().append("g")
                         .attr("class", function(data) {
                             if(data.children || data.hiddenChildren){

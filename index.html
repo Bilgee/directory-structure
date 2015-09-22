@@ -9,10 +9,13 @@
     </head>
     <body>
         <h1>Drop a folder</h1>
-        <div id="dropZone">
-            <span class="icon-folder-open"></span>
+        <div id="drop-zone">
+            <span class="icon-folder"></span>
         </div>
-        <div id="file_list_container">
+            <form method="post" id="filter">
+                <input class="corner textarea" type="text" name="filter" id="filter-data" value="" placeholder="Example: filename, .txt, .png">
+            </form>
+        <div id="container">
         </div>
         <script type="text/javascript" src="js/d3.min.js"></script>
         <script type="text/javascript" src="js/main.js"></script>
